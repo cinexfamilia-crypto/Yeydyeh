@@ -1,169 +1,93 @@
--- GODMODE HUB SIMPLES
+-- LUCK HUB - ALL IN ONE
+-- Funciona apenas se o jogo for mal protegido
 
 local Players = game:GetService("Players")
-local player = Players.LocalPlayer
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local lp = Players.LocalPlayer
 
--- GUI
-local gui = Instance.new("ScreenGui")
+-- UI
+local gui = Instance.new("ScreenGui", lp.PlayerGui)
 gui.ResetOnSpawn = false
-gui.Parent = player:WaitForChild("PlayerGui")
 
-local button = Instance.new("TextButton")
-button.Size = UDim2.fromScale(0.25, 0.08)
-button.Position = UDim2.fromScale(0.375, 0.02) -- topo, centralizado
-button.BackgroundColor3 = Color3.fromRGB(180, 0, 0) -- vermelho OFF
-button.TextColor3 = Color3.new(1,1,1)
-button.TextScaled = true
-button.Text = "GODMODE: OFF"
-button.Parent = gui
+local btn = Instance.new("TextButton", gui)
+btn.Size = UDim2.fromScale(0.3, 0.07)
+btn.Position = UDim2.fromScale(0.35, 0.05)
+btn.Text = "LUCK HUB: OFF"
+btn.BackgroundColor3 = Color3.fromRGB(150,0,0)
+btn.TextScaled = true
+btn.Draggable = true
+btn.Active = true
 
-local godmode = false
-local conn
+-- Estados
+local enabled = false
+local oldRandom = math.random
+local rollThread
+local hooked = false
 
-local function applyGodmode(char)
-	local hum = char:WaitForChild("Humanoid")
-
-	-- vida infinita
-	hum.MaxHealth = math.huge
-	hum.Health = math.huge
-
-	-- bloqueia morte
-	if conn then conn:Disconnect() end
-	conn = hum.HealthChanged:Connect(function()
-		if godmode and hum.Health < hum.MaxHealth then
-			hum.Health = hum.MaxHealth
-		end
-	end)
-end
-
-local function removeGodmode(char)
-	local hum = char:FindFirstChild("Humanoid")
-	if hum then
-		if conn then conn:Disconnect() end
-		hum.MaxHealth = 100
-		hum.Health = hum.MaxHealth
+-- 1️⃣ Forçar math.random
+local function forceRandom()
+	math.random = function(a,b)
+		if b then return b end
+		if a then return a end
+		return 1
 	end
 end
 
-button.MouseButton1Click:Connect(function()
-	godmode = not godmode
-
-	if godmode then
-		button.BackgroundColor3 = Color3.fromRGB(0, 170, 0) -- verde ON
-		button.Text = "GODMODE: ON"
-		if player.Character then
-			applyGodmode(player.Character)
-		end
-	else
-		button.BackgroundColor3 = Color3.fromRGB(180, 0, 0)
-		button.Text = "GODMODE: OFF"
-		if player.Character then
-			removeGodmode(player.Character)
-		end
-	end
-end)
-
-player.CharacterAdded:Connect(function(char)
-	if godmode then
-		applyGodmode(char)
-	end
-end)
-
--- ===== AIMBOT MELEE REAL =====
-
-local RunService = game:GetService("RunService")
-local Players = game:GetService("Players")
-local player = Players.LocalPlayer
-local camera = workspace.CurrentCamera
-
--- BOTÃO
-local aimBtn = Instance.new("TextButton")
-aimBtn.Size = button.Size
-aimBtn.Position = UDim2.fromScale(0.375, 0.11)
-aimBtn.BackgroundColor3 = Color3.fromRGB(180,0,0)
-aimBtn.TextColor3 = Color3.new(1,1,1)
-aimBtn.TextScaled = true
-aimBtn.Text = "AIMBOT MELEE: OFF"
-aimBtn.Parent = gui
-
-local aimbot = false
-local conn
-local RANGE = 15
-
--- pega tool equipada
-local function getTool()
-	local char = player.Character
-	if not char then return end
-	return char:FindFirstChildOfClass("Tool")
+local function restoreRandom()
+	math.random = oldRandom
 end
 
--- inimigo mais próximo
-local function getTarget()
-	local char = player.Character
-	if not char then return end
-	local root = char:FindFirstChild("HumanoidRootPart")
-	if not root then return end
+-- 2️⃣ Hook genérico de funções RNG locais
+local function hookRNG()
+	if hooked then return end
+	hooked = true
 
-	local closest, dist = nil, RANGE
-
-	for _, p in pairs(Players:GetPlayers()) do
-		if p ~= player and p.Character then
-			local hum = p.Character:FindFirstChild("Humanoid")
-			local hrp = p.Character:FindFirstChild("HumanoidRootPart")
-			if hum and hrp and hum.Health > 0 then
-				local d = (hrp.Position - root.Position).Magnitude
-				if d < dist then
-					dist = d
-					closest = hrp
-				end
+	for _,v in pairs(getgc(true)) do
+		if typeof(v) == "function" then
+			local info = debug.getinfo(v)
+			if info.name and string.lower(info.name):find("random") then
+				hookfunction(v, function(...)
+					return 1 -- força melhor resultado comum
+				end)
 			end
 		end
 	end
-	return closest
 end
 
-local function start()
-	if conn then conn:Disconnect() end
-	conn = RunService.RenderStepped:Connect(function()
-		if not aimbot then return end
-
-		local tool = getTool()
-		if not tool then return end
-
-		local target = getTarget()
-		if not target then return end
-
-		-- gira personagem
-		local char = player.Character
-		local root = char:FindFirstChild("HumanoidRootPart")
-		root.CFrame = CFrame.lookAt(root.Position, target.Position)
-
-		-- mira câmera
-		camera.CFrame = CFrame.lookAt(
-			camera.CFrame.Position,
-			target.Position
-		)
-
-		-- ataca
-		pcall(function()
-			tool:Activate()
-		end)
+-- 3️⃣ Auto spam de Remotes suspeitos
+local function autoRoll()
+	rollThread = task.spawn(function()
+		while enabled do
+			for _,obj in pairs(ReplicatedStorage:GetDescendants()) do
+				if obj:IsA("RemoteEvent") then
+					local name = string.lower(obj.Name)
+					if name:find("roll") or name:find("spin") or name:find("gacha") or name:find("luck") then
+						pcall(function()
+							obj:FireServer()
+						end)
+					end
+				end
+			end
+			task.wait(0.3)
+		end
 	end)
 end
 
-local function stop()
-	if conn then conn:Disconnect() end
-end
+-- Toggle
+btn.MouseButton1Click:Connect(function()
+	enabled = not enabled
 
-aimBtn.MouseButton1Click:Connect(function()
-	aimbot = not aimbot
-	if aimbot then
-		aimBtn.BackgroundColor3 = Color3.fromRGB(0,170,0)
-		aimBtn.Text = "AIMBOT MELEE: ON"
-		start()
+	if enabled then
+		btn.Text = "LUCK HUB: ON"
+		btn.BackgroundColor3 = Color3.fromRGB(0,150,0)
+
+		forceRandom()
+		hookRNG()
+		autoRoll()
 	else
-		aimBtn.BackgroundColor3 = Color3.fromRGB(180,0,0)
-		aimBtn.Text = "AIMBOT MELEE: OFF"
-		stop()
+		btn.Text = "LUCK HUB: OFF"
+		btn.BackgroundColor3 = Color3.fromRGB(150,0,0)
+
+		restoreRandom()
 	end
 end)
