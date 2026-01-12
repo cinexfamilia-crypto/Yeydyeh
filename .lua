@@ -69,30 +69,36 @@ player.CharacterAdded:Connect(function(char)
 	end
 end)
 
--- ===== AIMBOT MELEE =====
+-- ===== AIMBOT MELEE REAL =====
 
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
-local mouse = player:GetMouse()
+local camera = workspace.CurrentCamera
 
 -- BOTÃO
 local aimBtn = Instance.new("TextButton")
 aimBtn.Size = button.Size
-aimBtn.Position = UDim2.fromScale(0.375, 0.11) -- abaixo do godmode
-aimBtn.BackgroundColor3 = Color3.fromRGB(180, 0, 0) -- vermelho OFF
+aimBtn.Position = UDim2.fromScale(0.375, 0.11)
+aimBtn.BackgroundColor3 = Color3.fromRGB(180,0,0)
 aimBtn.TextColor3 = Color3.new(1,1,1)
 aimBtn.TextScaled = true
 aimBtn.Text = "AIMBOT MELEE: OFF"
 aimBtn.Parent = gui
 
 local aimbot = false
-local aimConn
+local conn
+local RANGE = 15
 
--- CONFIG
-local RANGE = 15 -- distância curta (studs)
+-- pega tool equipada
+local function getTool()
+	local char = player.Character
+	if not char then return end
+	return char:FindFirstChildOfClass("Tool")
+end
 
-local function getNearestEnemy()
+-- inimigo mais próximo
+local function getTarget()
 	local char = player.Character
 	if not char then return end
 	local root = char:FindFirstChild("HumanoidRootPart")
@@ -100,10 +106,10 @@ local function getNearestEnemy()
 
 	local closest, dist = nil, RANGE
 
-	for _, plr in pairs(Players:GetPlayers()) do
-		if plr ~= player and plr.Character then
-			local hum = plr.Character:FindFirstChild("Humanoid")
-			local hrp = plr.Character:FindFirstChild("HumanoidRootPart")
+	for _, p in pairs(Players:GetPlayers()) do
+		if p ~= player and p.Character then
+			local hum = p.Character:FindFirstChild("Humanoid")
+			local hrp = p.Character:FindFirstChild("HumanoidRootPart")
 			if hum and hrp and hum.Health > 0 then
 				local d = (hrp.Position - root.Position).Magnitude
 				if d < dist then
@@ -116,36 +122,37 @@ local function getNearestEnemy()
 	return closest
 end
 
-local function holdingMelee()
-	local char = player.Character
-	if not char then return false end
-	for _, tool in pairs(char:GetChildren()) do
-		if tool:IsA("Tool") then
-			-- maioria das espadas usa Handle
-			if tool:FindFirstChild("Handle") then
-				return true
-			end
-		end
-	end
-	return false
-end
-
-local function startAimbot()
-	if aimConn then aimConn:Disconnect() end
-	aimConn = RunService.RenderStepped:Connect(function()
+local function start()
+	if conn then conn:Disconnect() end
+	conn = RunService.RenderStepped:Connect(function()
 		if not aimbot then return end
-		if not holdingMelee() then return end
 
-		local target = getNearestEnemy()
-		if target then
-			mouse.TargetFilter = target.Parent
-			mouse.Hit = target.CFrame
-		end
+		local tool = getTool()
+		if not tool then return end
+
+		local target = getTarget()
+		if not target then return end
+
+		-- gira personagem
+		local char = player.Character
+		local root = char:FindFirstChild("HumanoidRootPart")
+		root.CFrame = CFrame.lookAt(root.Position, target.Position)
+
+		-- mira câmera
+		camera.CFrame = CFrame.lookAt(
+			camera.CFrame.Position,
+			target.Position
+		)
+
+		-- ataca
+		pcall(function()
+			tool:Activate()
+		end)
 	end)
 end
 
-local function stopAimbot()
-	if aimConn then aimConn:Disconnect() end
+local function stop()
+	if conn then conn:Disconnect() end
 end
 
 aimBtn.MouseButton1Click:Connect(function()
@@ -153,10 +160,10 @@ aimBtn.MouseButton1Click:Connect(function()
 	if aimbot then
 		aimBtn.BackgroundColor3 = Color3.fromRGB(0,170,0)
 		aimBtn.Text = "AIMBOT MELEE: ON"
-		startAimbot()
+		start()
 	else
 		aimBtn.BackgroundColor3 = Color3.fromRGB(180,0,0)
 		aimBtn.Text = "AIMBOT MELEE: OFF"
-		stopAimbot()
+		stop()
 	end
 end)
